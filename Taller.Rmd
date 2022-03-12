@@ -1,0 +1,401 @@
+---
+title: "Taller"
+author: ''
+date: "6/3/2022"
+output: html_document
+    params:
+      date: r Sys.Date()
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = TRUE,
+	warning = FALSE
+)
+```
+
+1. Carga del archivo
+```{r}
+library(readr)
+CensusIncomedataset <- read_delim("CensusIncomedataset.csv", 
+    delim = ";", escape_double = FALSE, trim_ws = TRUE)
+head(CensusIncomedataset)
+```
+Resumen del data frame
+```{r}
+summary(CensusIncomedataset)
+```
+2. Obtención del dataset para realizar el estudio
+```{r}
+#borrar las columnas solicitadas
+colaborrar<-c("fnlwgt", "capital_gain", "capital_loss")
+df<-CensusIncomedataset[,!names(CensusIncomedataset) %in% colaborrar]
+head(df)
+rm(colaborrar)
+```
+eliminar los registros con más de 5 valores nulos
+```{r}
+#### cuenta la cantioad de na
+naxcol<-rowSums(is.na(df))
+View(naxcol)
+rm(naxcol)
+```
+Se encuentra que hay seis observacionas con 6 valores perdidos, que se deben borrar
+```{r}
+borrar.na<-function(df, n=5){
+  df[rowSums(is.na(df))<=n,]
+}
+df<-borrar.na(df)
+```
+Creación de variables edcuacation_cat
+```{r}
+##### creación educacion_cat
+df$education_cat<-ifelse(df$education_num<7,"primaria", ifelse(df$education_num>=7&df$education_num<=9,"secundaria",
+ifelse(df$education_num>9&df$education_num<=13, "universitaria","postuniversitaria")))
+head(df$education_cat)
+```
+Cambio de nombre de la variable sex por gender
+```{r}
+names(df)
+names(df)[9]<-"gender"
+names(df)
+```
+3. Duplicación de codigo
+```{r}
+#identificación de las observaciones repetidas
+library(tidyverse)
+repetidos<-duplicated(df$CS_ID)
+df$CS_ID[repetidos]
+```
+```{r}
+#función para cambiar los codigos repetidos
+f1<-function(df){
+  n<-0
+  for(i in 1:length(repetidos)){
+    if(repetidos[i]==TRUE){
+      n<-n+1
+      df$CS_ID[i]<-paste("CS",32560+n, sep = "")
+    }
+  }
+  return(df)
+}
+df<-f1(df)
+```
+
+```{r}
+#comprobacion
+repetidos<-duplicated(df$CS_ID)
+df$CS_ID[repetidos]
+rm(repetidos)
+```
+4. Normalización de los datos cualitativos
+4.1 Eliminación de los espacios en blanco
+No se observan dichos espacios en blanco
+```{r}
+#comprobación
+df$relationship[100]
+nchar(df$relationship[100])
+df$workclass[5032]
+nchar(df$workclass[5032])
+df$occupation[23540]
+nchar(df$occupation[23540])
+df$race[20]
+nchar(df$race[20])
+```
+4.2 Marital-status
+```{r}
+# recodificación
+df$marital_status<-recode_factor(df$marital_status, Married="M",Single="S", Separated="X",Divorced="D", Widowed="W")
+head(df$marital_status)
+```
+4.3 Género
+```{r}
+#recodificación
+table(df$gender)
+df$gender<-recode_factor(df$gender, F="f",Fem="f", female="f",Female="f",m="m", M="m",Male="m",male="m")
+table(df$gender)
+```
+```{r}
+#gráfica de frecuencia
+plot(df$gender)
+```
+5. Normalización de datos cualitativos
+5.1 Edad
+```{r}
+#variable age de double a integer
+df$age<-as.integer(df$age)
+is.integer(df$age)
+```
+5.2 Educación
+```{r}
+#variable education_num de double a  integer
+df$education_num<-as.integer(df$education_num)
+is.integer(df$education_num)
+```
+5.3 Horas por semana
+```{r}
+#contar el numero de caracteres
+nc<-nchar(df$hours_per_week)
+#extraer del texto los caracters sobrantes
+df$hours_per_week<-substring(df$hours_per_week, 1,(nc-2))
+rm(nc)
+#cambiar coma por punto
+df$hours_per_week<-sub(",",".", df$hours_per_week)
+#cambiar de char a double
+df$hours_per_week<-as.double(df$hours_per_week)
+summary(df$hours_per_week)
+head(df$hours_per_week)
+```
+5.4 Income
+```{r}
+#contar el numero de caracteres
+nc<-nchar(df$income)
+#extaer del texto los caracteres sobrantes
+df$income<-substring(df$income, 1,(nc-15))
+rm(nc)
+#cambiar el punto por coma
+df$income<-sub(",",".", df$income)
+#cambiar de double a char
+df$income<-as.double(df$income)
+summary(df$income)
+head(df$income)
+```
+6. Valores atípicos
+```{r}
+#identificación de atípicos en la variable age
+hist(df$age)
+boxplot(df$age)
+summary(df$age)
+```
+se observan dos valores atípicos entre 500 y 600
+```{r}
+#Se remplazan los valores atípicos con NA
+for(i in 1:length(df$age)){
+  if(df$age[i]>100)
+    {df$age[i]<-NA}
+  }
+summary(df$age)
+```
+se comprueba nuevamente los valors atípicos
+```{r}
+hist(df$age)
+boxplot(df$age)
+```
+Se observan que hay valores fuera de los bigotes pero que estan justo en límite superior y se decide no eliminarlos, para conservar la información 
+Para la variable education_num 
+```{r}
+#identificación de valores atípicos para la variable educacion
+summary(df$education_num)
+hist(df$education_num)
+boxplot(df$education_num)
+```
+se observan que los valores inforiores a cinco se muestran como atipicos en el boxplot 
+```{r}
+#remplazo de atípicos por perdidos
+for(i in 1:length(df$education_num)){
+  if(df$education_num[i]<5)
+    {df$education_num[i]<-NA}
+  }
+summary(df$education_num)
+```
+Se comprueban nuevamente los valores atípicos
+```{r}
+hist(df$education_num)
+boxplot(df$education_num)
+```
+No se encuentran nuevos valores atípicos
+```{r}
+#identificacion de atípicos para la variable hora por semana
+hist(df$hours_per_week)
+boxplot(df$hours_per_week)
+summary(df$hours_per_week)
+```
+Se encuentran valores atípicos superiores e inferiores se usa el criterio sugerido y se remplazan los valores por enciam de 80 horas por semana
+```{r}
+#remplazo de atípicos por perdidos
+for(i in 1:length(df$hours_per_week)){
+  if(df$hours_per_week[i]>80)
+    {df$hours_per_week[i]<-NA}
+  }
+summary(df$hours_per_week)
+```
+
+```{r}
+#comprobación
+hist(df$hours_per_week)
+boxplot(df$hours_per_week)
+```
+Siguen habiendo valores atipicos pero no se recomienda quitarlos por la perdida de información 
+
+```{r}
+#valores atipicos de la variable income
+hist(df$income)
+boxplot(df$income)
+summary(df$income)
+```
+Se observa dos valores atipicos por encima de 2000. Pero primero se hace la imputaciónde los valores perdidos existentes
+```{r}
+#funcion que calcula el promedio sin NA
+f2<-function(x){
+  m<-mean(x, na.rm=TRUE) 
+  return(m) 
+}
+```
+```{r}
+#promedio por sexo
+tapply(df$income, df$gender, f2)
+```
+imputación de los NA para la variable income según el sexo
+```{r}
+#imputación
+f3<-function(df){
+for(i in 1:length(df$income)){
+  if(is.na(df$income[i])==TRUE){
+    if(df$gender[i]=="f"){
+      df$income[i]=41.52651}
+    else{
+        df$income[i]=52.32469}
+  }}
+  return(df$income)
+}
+```
+```{r}
+#se aplica la función f3 y se hace la comprobación
+df$income<-f3(df)
+summary(df$income)
+```
+Valores atipicos
+```{r}
+for(i in 1:length(df$income)){
+    if(df$income[i]>2000){
+       df$income[i]<-NA}
+  }
+```
+```{r}
+hist(df$income)
+boxplot(df$income)
+summary(df$income)
+```
+Se observan que siguen valores atípicos por debajo de 30.
+Se vuelve a realizar la imputación de los datos
+```{r}
+#se aplica la función f3 para imputar los nuevos valores perdidos y se hace la comprobación
+df$income<-f3(df)
+summary(df$income)
+```
+
+hay un ingreso cercano a cero que tambén se puede eliminar, también se eliminan los valores inferiores a 30
+```{r}
+for(i in 1:length(df$income)){
+  if(df$income[i]<=30)
+    {df$income[i]<-NA}
+  }
+summary(df$income)
+```
+```{r}
+boxplot(df$income)
+hist(df$income)
+```
+7. Imputación de los valores
+```{r}
+#variable edad se imputa con la media sin tener en cuenta los valores perdidos
+for(i in 1:length(df$age)){
+  if(is.na(df$age[i]==TRUE)){
+    df$age[i]=as.integer(mean(df$age, na.rm=TRUE))
+  }
+}
+summary(df$age)
+```
+Para la variable ingreso se imputa los valores perdidos con la media según género
+```{r}
+#se aplica f3 para imputar los casos
+df$income<-f3(df)
+summary(df$income)
+```
+Imputación de la variable "education_num
+```{r}
+library(VIM)
+df<-kNN(df,variable = "education_num", metric = "gower", k=11)
+summary(df$education_num)
+```
+Imputación para la variable hours_per_week
+```{r}
+df<-kNN(df,variable = "hours_per_week", metric = "gower", k=11)
+summary(df$hours_per_week)
+```
+
+8. Estudio descriptivos
+8.1 funciones de media robusta
+función de media truncada
+```{r}
+media.recortada <- function( x, perc=0.05){
+  m<-mean(x,trim = perc)
+  return(m)
+}
+c<-c(1,10,20,rep(30,94),70,80,90)
+mean(c)
+media.recortada(c)
+```
+media de winsor
+```{r}
+#install.packages("psych")
+library(psych)
+media.winsor<-function( x, perc=0.05){
+  m<-winsor.mean(x, trim=perc, na.rm=TRUE)
+  return(m)
+}
+```
+```{r}
+media.winsor(c)
+```
+8.2 Estudio descriptivo de las variables cuantitativas
+media, varianza, desviación estandar, medias truncadas
+```{r}
+media<-apply(df[,c(2,4,10,11)], 2, mean)
+```
+```{r}
+mediana<-apply(df[,c(2,4,10,11)], 2, median)
+```
+```{r}
+varianza<-apply(df[,c(2,4,10,11)], 2,var)
+```
+```{r}
+mediarecortada<-apply(df[,c(2,4,10,11)], 2, media.recortada)
+```
+```{r}
+mediawinsor<-apply(df[,c(2,4,10,11)], 2, media.winsor)
+```
+```{r}
+medidas<-data.frame(media, mediana,varianza,mediarecortada,mediawinsor)
+medidas
+```
+
+Grafica de la distribución 
+```{r}
+#función de histograma, curva de densidad comparado con una normal
+f4 <- function (x) {
+  # Histograma
+  hist(x, freq=FALSE, probability = TRUE)
+  #densidad
+  lines(density(df$income), lwd = 2, col = 'red')
+  #normal
+  x2 <- seq(min(x), max(x), length = 80)
+  f <- dnorm(x2, mean(x), sd(x))
+  lines(x2, f, col = "blue", lwd = 2)
+}
+```
+```{r}
+par(mfrow=c(2,2))
+f4(df$age)
+f4(df$education_num)
+f4(df$hours_per_week)
+f4(df$income)
+```
+9.Archivo Final
+```{r}
+write.csv(df, "CensusIncome_clean.csv")
+```
+
+
+
