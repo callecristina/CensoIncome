@@ -1,0 +1,342 @@
+---
+title: "Taller2"
+author: "--"
+date: "16/4/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+1. Lectura del fichero y preparación de los datos
+```{r}
+library(readr)
+censo <- read_delim("CensusIncome_clean.csv", 
+    delim = ";", escape_double = FALSE, trim_ws = TRUE)
+View(censo)
+### se leen los datos y se guardan en un objeto denominado censo
+```
+2. Edad
+2.1. Distribución de edades
+```{r}
+# se grafica el histograma con la curva normal
+hist(censo$age, main="Histograma edad vrs normal", xlab = "Edad", ylab="Freq", col="blue", breaks = 80, prob=TRUE)
+x <- seq(min(censo$age), max(censo$age), length = 40)
+f <- dnorm(x, mean = mean(censo$age), sd = sd(censo$age), log=FALSE)
+lines(x, f, col = "red", lwd = 2)
+```
+2.2. Normalidad
+No se observa que la distribución siga una forma de campana por lo tanto no se debe asumir normalidad en la distribución de las edades. Sin embargo dado que el tamaño de la muestra es mayor que 30 se puede utilizar una pruba con un estadistico t studen de dos colas
+
+2.3. Intervalo de confianza
+```{r}
+IC <- function( x, NC ){
+n<-length(x)
+e<-1-NC
+t<-abs(qt(p=e/2,df=(n-1), lower.tail=TRUE))
+media<-mean(x)
+desv<-sd(x)
+error<-desv/sqrt(n)
+margen<-t*error
+lim_inf<-media-margen
+lim_sup<-media+margen
+intervalo<-c(lim_inf, lim_sup)
+return(intervalo) 
+}
+```
+2.4. Cálculos
+```{r}
+i1<-IC(censo$age, 0.90)
+i1
+```
+```{r}
+i2<-IC(censo$age,0.95)
+i2
+```
+2.5. Interpretación
+Entre mayor sea el error permitido menor es el margen de estimación de la media porque el estadistico t toma valores mayores para los mismos grados de libertad.
+A pesar que no se puede asumir normalidad la estimación de sigue siendo suficientemente robusto, dado el tamaño de la muestra
+
+
+3. Salario
+3.1
+La pregunta de investigación es si existe una diferencia de medias entre dos submuestras
+3.2 Hipótesis
+H0: No hay diferencia de medias media 
+media Self-Employed-media NoSelf-Employed=0
+H1: hay diferencia de medias
+mediaSelf-Employed - mediaNoSelr-Employed!=0
+```{r}
+library(tidyverse)
+#subpoblaciones
+Self_Employed<-censo%>%filter(censo$workclass=="Self-Employed")%>%pull(income)
+No_Self_Employed<-censo%>%filter(censo$workclass!="Self-Employed")%>%pull(income)
+```
+```{r}
+#Diferencia de medias
+mean(No_Self_Employed) - mean(Self_Employed)
+```
+3.3. Test a aplicar dependera de la existencia de normalidad pero para el tamaño de la muestra se puede usar un t-student de dos colas.
+```{r}
+#grafica por subgurpos
+ggplot(censo,aes(x = income)) + 
+    geom_histogram(aes(y = ..density.., colour = workclass)) +
+    facet_grid(.~ workclass) +
+    theme_bw() + theme(legend.position = "none")
+```
+La poblacion Self_Employed parece seguir una distribución normal
+```{r}
+#qqplot
+par(mfrow = c(1, 2))
+qqnorm(No_Self_Employed, xlab = "norm quantiles", ylab = "income",
+       main = "No Self Employed", col = "red")
+qqline(No_Self_Employed)
+qqnorm(Self_Employed, xlab = "norm quantiles", ylab = "",
+       main = "Self_Employed", col = "green")
+qqline(Self_Employed)
+```
+La gráfica qq plot muestra que los extremos se alejan de la distribucón normal, sin embargo esto no nececesariamente significa la no normalidad
+
+```{r}
+#install.packages("nortest")
+require(nortest) 
+```
+```{r}
+ad.test(No_Self_Employed)
+ad.test(Self_Employed)
+```
+Se rechaza la hipotesis nula del test y no se puede afirmar que las poblaciones provengan de una distribución normal
+
+```{r}
+#igualdad de varianza
+ggplot(data = censo) +
+  geom_boxplot(aes(x = workclass, y = income, colour = workclass)) +
+  theme_bw() + theme(legend.position = "none")
+```
+Las graficas del boxplot para cada submuestra permite ver una varianza similar. 
+3.4 Calculo
+```{r}
+#parametro estimado, diferencia de medias
+p<-mean(No_Self_Employed) - mean(Self_Employed)
+```
+```{r}
+#grados de libertad
+df<-min(length(No_Self_Employed)-1, length(Self_Employed)-1)
+```
+```{r}
+#error standar
+seNSE<-var(No_Self_Employed)/length(No_Self_Employed)
+seSE<-var(Self_Employed)/length(Self_Employed)
+se<-sqrt(seNSE+seSE)
+se
+```
+```{r}
+#valor critico
+T3<-abs(p)/se
+T3
+```
+```{r}
+#p valor
+pt3<-pt(q=-T3, df=df)+(1-pt(q=T3,df=df))
+pt3
+```
+
+El p valor es inferior a los niveles de 0.05 y 0.1 entonces se rechaza la hipotesis nula y la diferencia de medias es significativa
+3.5. Conclusión
+Se concluye que existe una diferencia de medias entre las dos muestras 
+
+4. Proporción de Self-Employed
+4.1. Pregunta
+Se pregunta si la proporción Self_Employed de la población total es del 10%, en base a la muestra
+4.2 Hipotesis nula H0: la proporción es igual al 10% p-0.1=0
+Hipotesis alternativa H1: la poroporcion es diferente al 10% p-0.1!=0
+4.3 Representación gráfica
+```{r}
+#install.packages("lessR")
+library(lessR)
+```
+```{r}
+PieChart(workclass, hole=0, values="%", data=censo)
+```
+4.4 Contraste
+Dado el tamaño de la muestra n>30 se aplica una prueba normal.
+se debe cumplir que la muestra en estudio sea mayor a 5 y que la población total por la proporción contraria sea mayor que 5
+```{r}
+length(Self_Employed)>5
+```
+```{r}
+n<-length(censo$workclass)
+po<-length(No_Self_Employed)/length(censo$workclass)
+n*po>5
+
+```
+4.5. Cálculo
+```{r}
+#proporcion a testear
+p<-0.1
+#proporción observada
+pbarra<-length(Self_Employed)/length(censo$workclass)
+#valor de estadistico z
+ES<-sqrt(p*(1-p)/n)
+Z4<-(pbarra-p)/ES
+Z4
+```
+```{r}
+#área critica
+alfa <- 0.05
+c <- qnorm(1- (alfa/2))
+c
+```
+```{r}
+#contraste 
+Z4< -c | Z4> c  
+```
+Pvalor
+Dos veces la probabilidad de que una distribución Z sea mayor igual al valor que toma el estadistico  
+```{r}
+2*(1-pnorm(Z4))
+```
+Como el p valor es menor que el alfa, se rechaza la hipotesis nula de que la porporcion en cuestion es igual a 10%
+4.6. Conclusión
+Como el estadistico Z es mayor que la zona critca de la distribución nomal con un nivel de confianza de 0.95, se rechaza la hipotesis nula y la proporción de Self_Employed es diferente de 10%
+
+5. Proporción de Self-Employed en mujeres y hombres
+5.1. Pregunta de investigación
+La preguta es que si la proporcion de Self_Employed en mujeres es mayor que en hombres
+Psef<Psem
+5.2. Análisis visual
+```{r}
+#tabla de contigencia 
+t1<-table( censo$workclass, censo$gender)
+t1
+t2<-prop.table(t1, margin=2)
+t2
+```
+```{r}
+barplot(t2)
+```
+Visualmente se observa una diferencia de proporciones
+5.3. Hipótesis
+H0: La proporcion de Self_Employed en mujeres es diferente Psef-Psem=0
+h1: La proporcion de Self_Employed en mujeres es menor a los hombres
+Psef-Psem<0
+5.4. Test
+nuevamente dado el tamaño de la muestra y dado que hay por lo menos 10 existos y 10 fracasos para cada uno de las muestras se utiliza una distribucón normal z
+
+5.5. Cálculo
+```{r}
+#filtro por genero
+library(tidyverse)
+m<-censo%>%filter(censo$gender!="m")%>%pull(workclass)
+f<-censo%>%filter(censo$gender!="f")%>%pull(workclass)
+#tamaño de las submuestras
+nm<-length(m)
+nf<-length(f)
+nm
+nf
+
+```
+```{r}
+df<-data.frame(censo$workclass, censo$gender)
+for(i in 1:length(df$censo.workclass)){
+  if(df$censo.workclass[i]=="Self-Employed"){
+    df$Self_Employed[i]="Self_Employed"
+  }
+  else{
+    df$Self_Employed[i]="No_Self_Employed"
+  }
+}
+```
+```{r}
+#tabla de proporciones
+t3<-table( df$Self_Employed, df$censo.gender)
+t4<-prop.table(t3, margin=2)
+t3
+t4
+```
+```{r}
+alfa<-0.03
+#estadistico de la diferencia de proporciones
+esta<-t4[2,1]-t4[2,2]
+pc=(t3[2,1]+t3[2,2])/(nf+nm)
+q<-1-pc
+se<-sqrt(pc*q*(1/nf+1/nm))
+Z5<-esta/se
+#valor para el estadistico Z
+Z5
+
+```
+```{r}
+#region critica de rechazo
+c <- qnorm(alfa)
+c
+```
+```{r}
+#contraste
+abs(Z5)<abs(c)
+```
+Dado que el z calculado es mayor que la regiion critica de la normal con alfa de 0.03 se rechaza la hipotesis nula y se puede afirmar que existe una diferencia de proporciones entre las dos submuestras
+```{r}
+#p-valor
+1-pnorm(abs(Z5))
+```
+como la probabilidad es menor de el alfa se rechaza la igualdad de proporción para las dos submuestras
+5.6. Conclusión
+La proporción de Self_Employed es diferente entre mujeres y hombres, se acepta la hipotesis alternativa, siendo menor en mujeres
+
+
+6. Dependencia Género - Self-Employed
+6.1. Pregunta de investigación
+Se pregunta si el genero y la clase laboral son dependientes
+6.2. Hipótesis
+Ho: Las variables son independientes x2=0.
+Ha: Las variables son dependientes, x2>0.
+6.3. Test
+La prueba Chi cuadrado permite determinar si existe asociación entre dos variables discretas.
+Debe existir aleatoriedad
+También se debe cumplir que las variables categoricas poseen menos de 20 niveles
+y que los valores observados y esperados de la distribución sea superior a 5
+
+```{r}
+#Calcular el número de eventos esperados siendo Ho cierta
+#El porcentaje global de Self_Employed
+pg=length(Self_Employed)/length(censo$workclass)
+#valores esperados
+ef=nf*pg
+em=nm*pg
+ef
+em
+
+```
+```{r}
+#diferencia al cuadrado
+d2f<-(t3[2,1]-ef)^2
+d2m<-((t3[2,2]-em))^2
+#estadistico chi cuadrado
+chi2<-d2f/ef+d2m/em
+chi2
+```
+```{r}
+#p-valor
+pchisq(q= chi2, df= 1, lower.tail = FALSE) 
+```
+Como el p valor e inferior al alfa de 0.03 se rechaza la hipotesis nula de independencia
+6.5. Conclusión
+Las variables categoricas si son dependientes
+7. Resumen y conclusiones
+```{r}
+N<-c(2,3,4,5,6)
+Pregunta<-c("cual es valor medio de la edad", "existe diferencia de media en las dos submuestras", "si la proporción de Self-Employed es de 10%","Si la proporción de Self-Employed es mayor en mujeres","si las variables genero y clase laboral son dependientes")
+Resultados<-c("i1 y i2","T3","Z4","Z5","chi2")
+Conclusiones<-c("Entre mayor sea el error permitido menor es el margen de estimación de la media porque el estadistico t toma valores mayores para los mismos grados de libertad.","Se concluye que existe una diferencia de medias entre las dos muestras ","se rechaza la hipotesis nula y la proporción de Self_Employed es diferente de 10%","La proporción de Self_Employed es diferente entre mujeres y hombres siendo mayor, se acepta la hipotesis alternativa","Las variables categoricas si son dependientes")
+cuadro<-data.frame(N,Pregunta, Resultados, Conclusiones)
+cuadro
+```
+
+
+
+
